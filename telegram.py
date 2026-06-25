@@ -10,7 +10,7 @@ from aiohttp import web
 # ================= Настройки =================
 BOT_TOKEN = "8838437074:AAHKx-OeRcV0MUBepifw0rh81NsPRAfgsSI"
 CHANNEL_ID = "@freedom_gifts_channel"
-WEBAPP_URL = "https://webapp-saytingiz-manzili.com"
+WEBAPP_URL = "https://gift-jade-sigma.vercel.app/"
 PORT = int(os.environ.get("PORT", 8080)) # Server bergan port yoki standart 8080
 # =============================================
 
