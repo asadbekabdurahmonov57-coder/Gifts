@@ -1,22 +1,39 @@
 import logging
 import asyncio
+import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import CommandStart
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.enums import ChatMemberStatus
+from aiohttp import web
 
-# ================= Sozlamalar (O'zgartirishingiz shart) =================
-BOT_TOKEN = "8838437074:AAHKx-OeRcV0MUBepifw0rh81NsPRAfgsSI"       # @BotFather bergan token
-CHANNEL_ID = "@freedom_gifts_channel"               # Majburiy obuna kanali useri
-WEBAPP_URL = "https://webapp-saytingiz-manzili.com"  # index.html yuklangan sayt manzili
-# =========================================================================
+# ================= Настройки =================
+BOT_TOKEN = "8838437074:AAHKx-OeRcV0MUBepifw0rh81NsPRAfgsSI"
+CHANNEL_ID = "@freedom_gifts_channel"
+WEBAPP_URL = "https://webapp-saytingiz-manzili.com"
+PORT = int(os.environ.get("PORT", 8080)) # Server bergan port yoki standart 8080
+# =============================================
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Obunani tekshirish funksiyasi
+# 🌐 Server uxlab qolmasligi uchun Web-Ping tizimi (Health Check)
+async def handle_ping(request):
+    return web.Response(text="Я работаю! Бот активен. 🚀", content_type="text/plain")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get('/', handle_ping)
+    app.router.add_get('/ping', handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', PORT)
+    await site.start()
+    print(f"Веб-сервер успешно запущен на порту {PORT}...")
+
+# 🛡️ Проверка подписки на канал
 async def is_user_subscribed(user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id)
@@ -27,13 +44,12 @@ async def is_user_subscribed(user_id: int) -> bool:
         logging.error(f"Ошибка при проверке подписки: {e}")
         return False
 
-# /start komandasi
+# 🏁 Команда /start
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
     first_name = message.from_user.first_name
     
-    # Referal mantiqini aniqlash
     start_args = message.text.split()
     inviter_id = None
     if len(start_args) > 1 and start_args[1].startswith("ref_"):
@@ -43,7 +59,6 @@ async def cmd_start(message: types.Message):
     kb = InlineKeyboardBuilder()
     
     if not subscribed:
-        # Obuna bo'lmagan bo'lsa chiqadigan tugmalar
         kb.button(text="📢 Подписаться на канал", url=f"https://t.me/{CHANNEL_ID.replace('@', '')}")
         kb.button(text="✅ Проверить подписку", callback_data=f"check_sub_{inviter_id if inviter_id else 'none'}")
         kb.adjust(1)
@@ -54,7 +69,6 @@ async def cmd_start(message: types.Message):
             reply_markup=kb.as_markup()
         )
     else:
-        # Obuna bo'lgan bo'lsa chiqadigan o'yin tugmasi
         web_url = f"{WEBAPP_URL}?start=ref_{inviter_id}" if inviter_id else WEBAPP_URL
         kb.button(text="🧸 Открыть Барабан Удачи 🎡", web_app=types.WebAppInfo(url=web_url))
         kb.adjust(1)
@@ -65,7 +79,7 @@ async def cmd_start(message: types.Message):
             
         await message.answer(welcome_text, parse_mode="Markdown", reply_markup=kb.as_markup())
 
-# "Obunani tekshirish" tugmasi bosilganda
+# 🔄 Обработка кнопки "Проверить подписку"
 @dp.callback_query(lambda c: c.data.startswith('check_sub_'))
 async def process_check_sub(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
@@ -88,8 +102,12 @@ async def process_check_sub(callback_query: types.CallbackQuery):
     else:
         await callback_query.answer("Вы все еще не подписались на канал! ❌", show_alert=True)
 
-# Botni ishga tushirish
+# 🚀 Главная функция запуска
 async def main():
+    # 1. Запускаем веб-сервер для удержания пинга (Рендер/Хостинг)
+    await start_web_server()
+    
+    # 2. Запускаем самого Telegram бота
     print("Бот успешно запущен...")
     await dp.start_polling(bot)
 
